@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend-deployment
+  namespace: backendnamespace
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: go-backend
+  template:
+    metadata:
+      labels:
+        app: go-backend
+    spec:
+      containers:
+        - name: go-backend
+          image: jayantsampletech/backend:v1
+          ports:
+            - containerPort: 8080
+          env:
+            - name: DB_HOST
+              value: "my-postgres-db.cej2su0c6a8r.us-east-1.rds.amazonaws.com" ## replace withdb endpoint
+            - name: DB_PORT
+              value: "5432"
+            - name: DB_NAME
+              value: "mydb"
+            - name: ALLOWED_ORIGINS
+              value: "http://a5608fbb32a82434bb915892b5d4dd60-1058599478.us-east-1.elb.amazonaws.com:3000" ## replace with the reactapp loadbalancer url:3000
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: db-secret
+                  key: username
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: db-secret
+                  key: password

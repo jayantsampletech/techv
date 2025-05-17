@@ -1,0 +1,32 @@
+# Frontend Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontenddeployment
+  namespace: frontendnamespace
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: frontendapp
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 20%
+      maxUnavailable: 20%
+  template:
+    metadata:
+      labels:
+        app: frontendapp
+    spec:
+      containers:
+        - name: mainfrontendcr
+          image: jayantsampletech/frontend:v1
+          env:
+            - name: REACT_APP_SERVER_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: frontend-configmap
+                  key: REACT_APP_SERVER_URL
+          ports:
+            - containerPort: 3000

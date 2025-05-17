@@ -1,0 +1,44 @@
+pipeline {
+    agent any
+
+    stages {
+        stage('fetchthesourcecode') {
+            steps {
+                withCredentials([string(credentialsId: 'github-pat', variable: 'GIT_PAT')]) {
+                    git url: "https://$GIT_PAT@github.com/jayantsampletech/techv.git", branch: 'master'
+                }
+            }
+        }
+        
+
+        // Stage to build Docker image and push to Docker Hub
+        stage('Build Docker Image and push to Docker Hub') {
+            steps {
+                script {
+                    // Declare imageTag here to ensure it's accessible in other stages
+                    env.imageTag = "${env.BUILD_NUMBER}".replaceAll(/[^a-zA-Z0-9_.-]/, '_')
+                    
+                    docker.withRegistry('https://index.docker.io/v1/', 'docker-hub-credentials') {
+                        def appImage = docker.build("jayantsampletech/backend:${env.imageTag}","backend/")
+                        appImage.push()
+                    }
+                }
+            }
+        }
+
+        // Stage to alter the deployment.yaml file
+        stage('altering the deployment.yaml') {
+            steps {
+                // Use imageTag from the environment variable
+                sh """ sed -i 's|image: .*|image: jayantsampletech/backend:${env.imageTag}|' k8s-manifiests/backend/backend-deployment.yaml """
+            }
+        }
+        // stage for altering deployment.yaml finish 
+        stage('deploytokubernetes'){
+            steps{
+                sh """ kubectl apply -f k8s-manifiests/backend/backend-deployment.yaml """
+            }
+        }
+        //stage for deploying to kuberentes cluster finish
+    }
+}
