@@ -5,4 +5,4 @@ metadata:
   name: frontend-configmap
   namespace: frontendnamespace
 data:
-  REACT_APP_SERVER_URL: "http://a948c996740494f1c9f72a53c9211185-1974096963.us-east-1.elb.amazonaws.com:8080/employees" ## replace with the go app loadbalancer url:8080/employees 
+  REACT_APP_SERVER_URL: "http://a948c996740494f1c9f72a53c9211185-1974096963.us-east-1.elb.amazonaws.com:8080/employees" ## re 
