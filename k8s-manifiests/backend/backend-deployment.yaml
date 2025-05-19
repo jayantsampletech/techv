@@ -20,13 +20,13 @@ spec:
             - containerPort: 8080
           env:
             - name: DB_HOST
-              value: "my-postgres-db.cej2su0c6a8r.us-east-1.rds.amazonaws.com" ## replace withdb endpoint
+              value: "my-postgres-db.cej2su0c6a8r.us-east-1.rds.amazonaws.com" ## re
             - name: DB_PORT
               value: "5432"
             - name: DB_NAME
               value: "mydb"
             - name: ALLOWED_ORIGINS
-              value: "http://a5608fbb32a82434bb915892b5d4dd60-1058599478.us-east-1.elb.amazonaws.com:3000" ## replace with the reactapp loadbalancer url:3000
+              value: "http://a5608fbb32a82434bb915892b5d4dd60-1058599478.us-east-1.elb.amazonaws.com:3000" ## re
             - name: DB_USER
               valueFrom:
                 secretKeyRef:
