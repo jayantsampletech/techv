@@ -1,0 +1,54 @@
+version: "3.9"
+
+services:
+  database:
+    image: postgres:15
+    container_name: my_postgres_db
+    environment:
+      POSTGRES_USER: myuser
+      POSTGRES_PASSWORD: mypassword
+      POSTGRES_DB: mydb
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U myuser -d mydb"]
+      interval: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - app-network
+
+  backend:
+    image: jayantsampletech/backend:v1
+    container_name: ubuntu-backend-1
+    depends_on:
+      database:
+        condition: service_healthy
+    environment:
+      DB_HOST: database
+      DB_USER: myuser
+      DB_PASSWORD: mypassword
+      DB_NAME: mydb
+      DB_PORT: 5432
+      ALLOWED_ORIGINS: http://13.127.216.201:3000  # ✅ Only the frontend base URL, NOT /employees
+    networks:
+      - app-network
+    ports:
+      - "8080:8080"  # ✅ Now exposed to outside
+
+  frontend:
+    image: jayantsampletech/frontend:v1
+    container_name: ubuntu-frontend-1
+    environment:
+      - REACT_APP_SERVER_URL=http://13.127.216.201:8080/employees  # ✅ Backend's public endpoint
+    networks:
+      - app-network
+    ports:
+      - "3000:3000"  # ✅ Now exposed to outside
+
+volumes:
+  postgres_data:
+
+networks:
+  app-network:
+    driver: bridge
