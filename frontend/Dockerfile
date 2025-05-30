@@ -1,20 +1,13 @@
-# Use a specific Node.js version
-FROM node:14.17.0
-
-# Set working directory
+FROM node:20-alpine AS builder
 WORKDIR /app
-
-# Copy package files separately to leverage Docker cache
 COPY package*.json ./
-
-# Install dependencies
 RUN npm install
-
-# Copy the rest of the source code
 COPY . .
-
-# Expose the port React runs on
-EXPOSE 3000
-
-# Start the application
-CMD ["npm", "start"]
+ARG REACT_APP_SERVER_URL
+ENV REACT_APP_SERVER_URL=$REACT_APP_SERVER_URL
+RUN npm run build
+FROM nginx:stable-alpine AS production
+RUN rm -rf /usr/share/nginx/html/*
+COPY --from=builder /app/build /usr/share/nginx/html
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]

@@ -4,10 +4,8 @@ services:
   database:
     image: postgres:15
     container_name: my_postgres_db
-    environment:
-      POSTGRES_USER: myuser
-      POSTGRES_PASSWORD: mypassword
-      POSTGRES_DB: mydb
+    env_file:
+      - database.env
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -24,27 +22,27 @@ services:
     depends_on:
       database:
         condition: service_healthy
-    environment:
-      DB_HOST: database
-      DB_USER: myuser
-      DB_PASSWORD: mypassword
-      DB_NAME: mydb
-      DB_PORT: 5432
-      ALLOWED_ORIGINS: http://13.127.216.201:3000  # ✅ Only the frontend base URL, NOT /employees
+    env_file:
+      - backend.env
     networks:
       - app-network
     ports:
-      - "8080:8080"  # ✅ Now exposed to outside
+      - "8080:8080"
 
   frontend:
-    image: jayantsampletech/frontend:v1
+    build:
+      context: ./frontend
+      args:
+        REACT_APP_SERVER_URL: ${REACT_APP_SERVER_URL}
+    depends_on:
+      backend:
+    env_file:
+      - frontend.env
     container_name: ubuntu-frontend-1
-    environment:
-      - REACT_APP_SERVER_URL=http://13.127.216.201:8080/employees  # ✅ Backend's public endpoint
     networks:
       - app-network
     ports:
-      - "3000:3000"  # ✅ Now exposed to outside
+      - "3000:80"
 
 volumes:
   postgres_data:
