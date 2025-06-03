@@ -82,16 +82,17 @@ jobs:
       - name: Deploy to EC2 via SSH
         uses: appleboy/ssh-action@v1.0.0
         env:
-          IMAGE_TAG: ${{ steps.build-image.outputs.IMAGE_TAG }}
+          IMAGE_TAG: ${{ env.IMAGE_TAG }}
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             cd /home/ubuntu
-            sed -i "s#image: *\"jayantsampletech/backend:[^\"]*\"#image: \"jayantsampletech/backend:${IMAGE_TAG}\"#g" docker-compose.yaml
+            sed -i 's#^\(\s*image:\s*"\?jayantsampletech/backend:\)[^"]*\("?$\)#\1'"${IMAGE_TAG}"'\2#' docker-compose.yaml
             docker compose pull backend
             docker compose up -d
+
 
       - name: Clean up Docker
         run: docker system prune -f --all
