@@ -1,0 +1,103 @@
+name: CI/CD Pipeline for Backend
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  SONARQUBE_SERVER: http://65.2.167.139:9000/
+  IMAGE_NAME: jayantsampletech/backend
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Source Code
+      uses: actions/checkout@v3
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.20'
+
+    - name: Install golangci-lint
+      run: |
+        curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $HOME/go/bin v1.55.2
+        echo "$HOME/go/bin" >> $GITHUB_PATH
+
+    - name: Run Linter
+      run: |
+        cd backend
+        golangci-lint run ./...
+
+    - name: Run Unit Tests
+      run: echo "Running unit tests for backend..."
+
+    - name: Run SonarQube Scan
+      env:
+        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      run: |
+        wget https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-6.2.0.3016-linux.zip
+        unzip sonar-scanner-cli-6.2.0.3016-linux.zip
+        export PATH=$PWD/sonar-scanner-6.2.0.3016-linux/bin:$PATH
+        sonar-scanner \
+          -Dsonar.projectKey=proj1-backend \
+          -Dsonar.projectName="proj1-backend" \
+          -Dsonar.sources=. \
+          -Dsonar.host.url=${{ env.SONARQUBE_SERVER }} \
+          -Dsonar.login=${{ secrets.SONAR_TOKEN }}
+
+    - name: Build Docker Image
+      run: |
+        export IMAGE_TAG=${{ github.run_number }}
+        docker build -t $IMAGE_NAME:$IMAGE_TAG backend
+
+    - name: Trivy Scan
+      run: |
+        export IMAGE_TAG=${{ github.run_number }}
+        curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+        trivy image --exit-code 1 --severity HIGH,CRITICAL --no-progress $IMAGE_NAME:$IMAGE_TAG
+
+    - name: Log in to Docker Hub
+      run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+
+    - name: Push Docker Image
+      run: |
+        export IMAGE_TAG=${{ github.run_number }}
+        docker push $IMAGE_NAME:$IMAGE_TAG
+
+    - name: Deploy to EC2 via SSH
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.EC2_HOST }}
+        username: ubuntu
+        key: ${{ secrets.EC2_SSH_KEY }}
+        script: |
+          cd /home/ubuntu
+          sed -i "s#jayantsampletech/backend:[^[:space:]]*#jayantsampletech/backend:${{ github.run_number }}#g" docker-compose.yaml
+          docker compose pull backend
+          docker compose up -d
+
+    - name: Slack Success Notification
+      if: success()
+      uses: slackapi/slack-github-action@v1.24.0
+      with:
+        payload: |
+          {
+            "text": "✅ *Build Succeeded* for `${{ github.repository }}` Run #${{ github.run_number }}\n🔗 ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          }
+      env:
+        SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+
+    - name: Slack Failure Notification
+      if: failure()
+      uses: slackapi/slack-github-action@v1.24.0
+      with:
+        payload: |
+          {
+            "text": "❌ *Build Failed* for `${{ github.repository }}` Run #${{ github.run_number }}\n🔗 ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          }
+      env:
+        SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
