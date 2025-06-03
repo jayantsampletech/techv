@@ -35,13 +35,16 @@ jobs:
       - name: Unit Test
         run: echo "Running unit test cases for backend..."
 
-      - name: Set up SonarQube Scanner
+      - name: SonarQube Scan
         uses: sonarsource/sonarqube-scan-action@v2
-        with:
-          projectBaseDir: .
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ env.SONARQUBE_SERVER }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+        with:
+          args: >
+            -Dsonar.projectKey=proj1-backend
+            -Dsonar.projectName=proj1-backend
+            -Dsonar.sources=backend
 
       - name: Wait for SonarQube Quality Gate
         uses: sonarsource/sonarqube-quality-gate-action@v1
