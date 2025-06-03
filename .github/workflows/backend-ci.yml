@@ -57,7 +57,7 @@ jobs:
         run: |
           IMAGE_TAG=$(echo $GITHUB_RUN_NUMBER | sed 's/[^a-zA-Z0-9_.-]/_/g')
           echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
-          docker build -t $IMAGE_NAME:$IMAGE_TAG backend/
+          docker build -t "$IMAGE_NAME:$IMAGE_TAG" backend/
 
       # - name: Scan Docker image with Trivy
       #   uses: aquasecurity/trivy-action@master
@@ -75,7 +75,7 @@ jobs:
 
       - name: Push Docker image
         run: |
-          docker push $IMAGE_NAME:$IMAGE_TAG
+          docker push "$IMAGE_NAME:$IMAGE_TAG"
 
       - name: Deploy to EC2 via SSH
         uses: appleboy/ssh-action@v1.0.0
@@ -85,7 +85,7 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             cd /home/ubuntu
-            sed -i "s#jayantsampletech/backend:[^[:space:]]*#jayantsampletech/backend:${IMAGE_TAG}#g" docker-compose.yaml
+            sed -i "s#image: \?\"*jayantsampletech/backend:[^\"]*\"*#image: \"jayantsampletech/backend:${IMAGE_TAG}\"#g" docker-compose.yaml
             docker compose pull backend
             docker compose up -d
 
