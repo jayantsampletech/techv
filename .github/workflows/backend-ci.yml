@@ -87,9 +87,10 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             cd /home/ubuntu
-            sed -i "s#image: \?\"****/backend:[^\"]*\"*#image: \"****/backend:${IMAGE_TAG}\"#g" docker-compose.yaml
+            sed -i "s#image: *\"****/backend:[^\"]*\"#image: \"jayantsampletech/backend:${IMAGE_TAG}\"#g" docker-compose.yaml
             docker compose pull backend
             docker compose up -d
+
 
 
       - name: Clean up Docker
