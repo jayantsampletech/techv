@@ -6,7 +6,7 @@ on:
       - master
 
 env:
-  SONARQUBE_SERVER: http://65.2.167.139:9000/
+  SONARQUBE_SERVER: http://13.127.166.199:9000/
   IMAGE_NAME: jayantsampletech/backend
   DOCKER_REGISTRY: docker.io
 
