@@ -1,0 +1,87 @@
+name: CI/CD Pipeline for Backend
+
+on:
+  push:
+    branches:
+      - master
+
+env:
+  IMAGE_NAME: jayantsampletech/backend
+  DOCKER_REGISTRY: docker.io
+
+jobs:
+  backend-ci:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Unit Test
+        run: echo "Running unit test cases for backend..."
+
+      - name: SonarQube Scan
+        uses: sonarsource/sonarqube-scan-action@v2
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+        with:
+          args: >
+            -Dsonar.projectKey=proj1-backend
+            -Dsonar.projectName=proj1-backend
+            -Dsonar.sources=backend
+
+      - name: Wait for SonarQube Quality Gate
+        uses: sonarsource/sonarqube-quality-gate-action@v1
+        with:
+          scanMetadataReportFile: .scannerwork/report-task.txt
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+      - name: Build Docker image
+        run: |
+          IMAGE_TAG=$(echo $GITHUB_RUN_NUMBER | sed 's/[^a-zA-Z0-9_.-]/_/g')
+          echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
+          docker build -t "$IMAGE_NAME:$IMAGE_TAG" backend/
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Push Docker image
+        run: |
+          docker push "$IMAGE_NAME:$IMAGE_TAG"
+
+      - name: Deploy to EC2 via SSH
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            echo "Deploying with IMAGE_TAG: ${{ env.IMAGE_TAG }}"
+            cd /home/ubuntu
+            sed -i "s|image:.*|image: \"jayantsampletech/backend:${{ env.IMAGE_TAG }}\"|g" docker-compose.yaml
+            cat docker-compose.yaml
+            docker compose pull backend
+            docker compose up -d
+
+      - name: Slack Success Notification
+        if: success()
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_CHANNEL: jenkins-notifications
+          SLACK_COLOR: good
+          SLACK_TITLE: ✅ CI/CD Succeeded - ${{ github.job }}
+          SLACK_WEBHOOK: ${{ secrets.SLACK_BOT_TOKEN }}
+
+      - name: Slack Failure Notification
+        if: failure()
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_CHANNEL: jenkins-notifications
+          SLACK_COLOR: danger
+          SLACK_TITLE: ❌ CI/CD Failed - ${{ github.job }}
+          SLACK_WEBHOOK: ${{ secrets.SLACK_BOT_TOKEN }}

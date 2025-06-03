@@ -1,0 +1,150 @@
+    pipeline {
+        agent any 
+        environment {
+            SONARQUBE_SERVER = 'http://65.2.167.139:9000/'  // SonarQube server URL
+            SONARQUBE_SCANNER_HOME = tool name: 'sonar-scanner-6.2'  // SonarQube Scanner tool name
+            imageTag = "${env.BUILD_NUMBER}".replaceAll(/[^a-zA-Z0-9_.-]/, '_')
+            IMAGE_NAME = "jayantsampletech/backend:${imageTag}"
+        }
+        stages {
+            // fetching the source code 
+            stage('fetchfromgithub') {
+                steps {
+                    git 'https://github.com/jayantsampletech/techv.git'
+                }
+            }
+
+            // Linting it 
+            linter run 
+            stage('Run Linter') {
+                steps {
+                    sh '''
+                    export PATH=$PATH:/usr/local/go/bin
+                    cd backend
+                    golangci-lint run ./...
+                    '''
+                }
+            }
+
+            // Running Unite test cases 
+            stage('UnitTestCases') {
+                steps {
+                    echo "Running unit test cases for backend..."
+                    
+                }
+            }
+
+            // sonar scan 
+            stage('SonarQube Scan and Upload') {
+                steps {
+                    script {
+                        withSonarQubeEnv('sonar-server') {
+                            sh """
+                            ${SONARQUBE_SCANNER_HOME}/bin/sonar-scanner \
+                            -Dsonar.projectKey=proj1-backend \
+                            -Dsonar.projectName="proj1-backend" \
+                            -Dsonar.sources=. \
+                            -Dsonar.host.url=${SONARQUBE_SERVER}
+                            """
+                        }
+                    }
+                }
+            }
+
+
+            // Quality Gate check 
+            stage('Wait for Quality Gate') {
+                steps {
+                    timeout(time: 2, unit: 'MINUTES') {
+                        script {
+                            def qg = waitForQualityGate()
+                            if (qg.status != 'OK') {
+                                currentBuild.result = 'FAILURE'
+                                error "Pipeline aborted due to quality gate failure: ${qg.status}"
+                            }
+                        }
+                    }
+                }
+            }
+
+
+            // building the docker image     
+            stage('Build Docker Image') {
+                steps {
+                    script {
+                        docker.build(env.IMAGE_NAME, "backend/")  
+                    }
+                }
+            }
+
+
+            // scanning with trivy 
+            stage('Scan Docker Image with Trivy') {
+                steps {
+                    script {
+                        echo "Scanning image ${env.IMAGE_NAME} with Trivy..."
+                        def result = sh(
+                            script: "trivy image --exit-code 1 --severity HIGH,CRITICAL --no-progress ${env.IMAGE_NAME}",
+                            returnStatus: true
+                        )
+                        if (result != 0) {
+                            error("Trivy scan failed: High or Critical vulnerabilities found in ${env.IMAGE_NAME}")
+                        } else {
+                            echo "Trivy scan passed: No high or critical vulnerabilities."
+                        }
+                    }
+                }
+            }
+
+
+            // Push to dockerhub
+            stage('Push Docker Image to Docker Hub') {
+                steps {
+                    script {
+                        docker.withRegistry('https://index.docker.io/v1/', 'docker-hub-credentials') {
+                            def appImage = docker.image(env.IMAGE_NAME)
+                            appImage.push()
+                        }
+                    }
+                }
+            }
+
+
+            // Deploy to compose 
+            stage('Deploy to EC2 via Docker Compose') {
+                steps {
+                    sshagent(['ec2-ubuntu-key']) {
+                        sh """
+                            ssh -o StrictHostKeyChecking=no ubuntu@13.127.251.203 '
+                                cd /home/ubuntu &&
+                                sed -i "s#jayantsampletech/backend:[^[:space:]]*#jayantsampletech/backend:${imageTag}#g" docker-compose.yaml &&
+                                docker compose pull backend &&
+                                docker compose up -d
+                            '
+                        """
+                    }
+                }
+            }
+        }
+
+        // Configue post build for cleaning and notificatio 
+        post {
+            always {
+                sh "docker system prune -f --all"
+            }
+            success {
+                slackSend(
+                    channel: '#jenkins-notifications', 
+                    color: 'good',
+                    message: "✅ Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]' *SUCCEEDED*\n🔗 ${env.BUILD_URL}"
+                )
+            }
+            failure {
+                slackSend(
+                    channel: '#jenkins-notifications',
+                    color: 'danger',
+                    message: "❌ Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]' *FAILED*\n🔗 ${env.BUILD_URL}"
+                )
+            }
+        }
+    }
